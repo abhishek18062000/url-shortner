@@ -55,7 +55,7 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           ssh ${EC2_USER}@${EC2_HOST} '
-            sudo install -o ubuntu -g ubuntu -m 644 /tmp/app.jar /opt/urlshortener/app.jar &&
+            sudo install -o ubuntu -g ubuntu -m 644 /tmp/app.jar /opt/urlshortner/app.jar &&
             rm /tmp/app.jar &&
             sudo systemctl restart urlshortener &&
             sleep 5 &&
