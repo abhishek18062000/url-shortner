@@ -1,3 +1,4 @@
+
 name: Spring Boot CI/CD
 
 on:
@@ -5,8 +6,11 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,3 +25,39 @@ jobs:
 
       - name: Build Spring Boot application
         run: mvn clean package -DskipTests
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Configure known hosts
+        env:
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Copy JAR to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          JAR_FILE=$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)
+          test -n "$JAR_FILE"
+          scp "$JAR_FILE" ${EC2_USER}@${EC2_HOST}:/tmp/app.jar
+
+      - name: Deploy and restart application
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh ${EC2_USER}@${EC2_HOST} '
+            sudo install -o ubuntu -g ubuntu -m 644 /tmp/app.jar /opt/urlshortener/app.jar &&
+            rm /tmp/app.jar &&
+            sudo systemctl restart urlshortener &&
+            sleep 5 &&
+            sudo systemctl is-active --quiet urlshortener
+          '
